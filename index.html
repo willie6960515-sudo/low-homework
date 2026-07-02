@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>多作業繳交紀錄 v16.7 (低年級專屬版)</title>
+    <title>多作業繳交紀錄 v16.8 (完美連動版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
     
@@ -65,7 +65,7 @@
         <!-- 標題與登入區 -->
         <header class="flex flex-col md:flex-row justify-between items-center relative gap-4">
             <div class="text-center md:text-left">
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-700">每日作業繳交紀錄 <span class="text-sm text-blue-500 font-bold ml-2">v16.7 (低年級專屬版)</span></h1>
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-700">每日作業繳交紀錄 <span class="text-sm text-blue-500 font-bold ml-2">v16.8 (連動版)</span></h1>
                 <p class="text-lg text-gray-500 mt-2 flex items-center gap-2 justify-center md:justify-start">
                     <span id="app-mode-label">單機模式 (未登入)</span>
                     <span id="save-indicator" class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full hidden">已存檔</span>
@@ -485,12 +485,17 @@
                 if (storedData) allData = JSON.parse(storedData);
                 else allData = {};
                 
-                // 🔒 本機資料：對接低年級的 blackboard_low_data
+                // 🌟 本機防護罩：讀取電子看板的假別設定
                 const boardLocal = localStorage.getItem('blackboard_low_data');
                 if (boardLocal) {
                     const parsedBoard = JSON.parse(boardLocal);
                     Object.keys(parsedBoard).forEach(date => {
-                        absentData[date] = parsedBoard[date].absentSeats || [];
+                        let absents = parsedBoard[date].absentSeats || [];
+                        // 升級：支援讀取看板新版的 leaves 物件
+                        if (parsedBoard[date].leaves) {
+                            absents = [...new Set([...absents, ...Object.keys(parsedBoard[date].leaves).map(Number)])];
+                        }
+                        absentData[date] = absents;
                     });
                 }
 
@@ -554,7 +559,7 @@
                     els.loadingOverlay.style.display = 'none';
                 });
 
-                // 🔒 雲端資料：對接 board_records_low 取得低年級看板的請假狀況
+                // 🌟 雲端防護罩：對接 board_records_low 取得低年級看板的請假狀況
                 const boardRef = db.collection('users').doc(user.uid).collection('board_records_low');
                 unsubscribeBoard = boardRef.onSnapshot((snapshot) => {
                     snapshot.docChanges().forEach((change) => {
@@ -562,7 +567,13 @@
                         if (change.type === "removed") {
                             delete absentData[date];
                         } else {
-                            absentData[date] = change.doc.data().absentSeats || [];
+                            const data = change.doc.data();
+                            let absents = data.absentSeats || [];
+                            // 升級：讀取看板寫入的最新 leaves 物件
+                            if (data.leaves) {
+                                absents = [...new Set([...absents, ...Object.keys(data.leaves).map(Number)])];
+                            }
+                            absentData[date] = absents;
                         }
                     });
                     if(currentTab === 'daily') render();
