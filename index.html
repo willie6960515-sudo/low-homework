@@ -22,6 +22,22 @@
         .student-grid-item { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
         .student-grid-item.clickable:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.1); cursor: pointer; }
         
+        .student-card-heading { display: flex; align-items: flex-start; gap: 2px; }
+        .student-seat-number { flex: 1; }
+        .student-family-badge {
+            display: inline-flex; flex: none; align-items: center; justify-content: center;
+            box-sizing: border-box; min-width: 1.25rem; height: 1.25rem; padding-inline: 2px;
+            border-radius: 9999px; border: 1px solid #E8D6B7;
+            background-color: #FFF8E8; color: #73501E; font-size: 0.6875rem; line-height: 1;
+        }
+        @media (max-width: 420px) {
+            .student-card-heading { margin-inline: -0.25rem; }
+            .student-card-heading .student-seat-number { font-size: 1.25rem; }
+        }
+        @media (min-width: 640px) {
+            .student-card-heading:has(.student-family-badge) { padding-inline-start: calc(1.25rem + 2px); }
+        }
+
         .tab-btn { transition: all 0.2s; }
         
         /* 月曆樣式 */
@@ -65,7 +81,7 @@
         <!-- 標題與登入區 -->
         <header class="flex flex-col md:flex-row justify-between items-center relative gap-4">
             <div class="text-center md:text-left">
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-700">每日作業繳交紀錄 <span class="text-sm text-blue-500 font-bold ml-2">v16.8 (連動版)</span></h1>
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-700">每日作業繳交紀錄 <span class="text-sm text-blue-500 font-bold ml-2">v16.9 (家別標記)</span></h1>
                 <p class="text-lg text-gray-500 mt-2 flex items-center gap-2 justify-center md:justify-start">
                     <span id="app-mode-label">單機模式 (未登入)</span>
                     <span id="save-indicator" class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full hidden">已存檔</span>
@@ -968,26 +984,57 @@
                 }
 
                 const currentAbsent = getGlobalAbsentSeats();
+                const familiesBySeat = new Map();
+                const chineseFamilyNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+                studentGroups.forEach((group, index) => {
+                    const numberInName = group.name.match(/^第\s*([0-9]+|[一二三四五六七八九十])\s*家$/)?.[1];
+                    const namedNumber = chineseFamilyNumbers.indexOf(numberInName) + 1 || Number(numberInName);
+                    const number = namedNumber || index + 1;
+
+                    group.members.forEach(seat => {
+                        if (!familiesBySeat.has(seat)) {
+                            familiesBySeat.set(seat, { number, name: group.name });
+                        }
+                    });
+                });
 
                 students.forEach(student => {
                     const isAbsent = currentAbsent.includes(student.seatNumber);
                     const currentStatus = active.records[student.seatNumber] || 'not-submitted';
                     const statusInfo = statusMap[currentStatus];
                     const div = document.createElement('div');
-                    
-                    if (isAbsent) {
-                        div.className = `student-grid-item p-2 rounded-lg text-center font-bold text-lg shadow select-none bg-gray-200 text-gray-400 opacity-60 cursor-not-allowed`;
-                        div.dataset.seat = student.seatNumber;
-                        div.innerHTML = `<div class="text-2xl pointer-events-none">${student.seatNumber}</div><div class="text-sm truncate px-1 pointer-events-none">${student.name || '　'}</div><div class="text-xs mt-1 border-t border-gray-300 pt-1 pointer-events-none">🔒 請假</div>`;
-                    } else {
-                        div.className = `student-grid-item clickable p-2 rounded-lg text-center font-bold text-lg shadow select-none ${statusInfo.className}`;
-                        div.dataset.seat = student.seatNumber;
-                        div.innerHTML = `<div class="text-2xl pointer-events-none">${student.seatNumber}</div><div class="text-sm truncate px-1 pointer-events-none">${student.name || '　'}</div><div class="text-xs mt-1 border-t border-current border-opacity-20 pt-1 pointer-events-none">${statusInfo.text}</div>`;
+                    const cardStatusClass = isAbsent
+                        ? 'bg-gray-200 text-gray-400 opacity-60 cursor-not-allowed'
+                        : `clickable ${statusInfo.className}`;
+                    const statusBorderClass = isAbsent ? 'border-gray-300' : 'border-current border-opacity-20';
+                    const statusText = isAbsent ? '🔒 請假' : statusInfo.text;
+
+                    div.className = `student-grid-item p-2 rounded-lg text-center font-bold text-lg shadow select-none ${cardStatusClass}`;
+                    div.dataset.seat = student.seatNumber;
+                    div.innerHTML = `
+                        <div class="student-card-heading">
+                            <div class="student-seat-number text-2xl pointer-events-none">${student.seatNumber}</div>
+                        </div>
+                        <div class="text-sm truncate px-1 pointer-events-none">${student.name || '　'}</div>
+                        <div class="text-xs mt-1 border-t ${statusBorderClass} pt-1 pointer-events-none">${statusText}</div>
+                    `;
+
+                    const family = familiesBySeat.get(student.seatNumber);
+                    if (family) {
+                        const badge = document.createElement('span');
+                        badge.className = 'student-family-badge';
+                        badge.textContent = family.number;
+                        badge.title = family.name;
+                        badge.setAttribute('role', 'img');
+                        badge.setAttribute('aria-label', family.name);
+                        div.querySelector('.student-card-heading').appendChild(badge);
                     }
-                    
+
                     els.studentGrid.appendChild(div);
                 });
             }
+
 
             function updateStats() {
                 const active = getActiveAssignment();
