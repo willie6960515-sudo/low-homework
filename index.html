@@ -59,6 +59,9 @@
         /* Summary Cards */
         .summary-card { transition: transform 0.2s; }
         .summary-card:hover { transform: translateY(-2px); }
+        .summary-seat { position: relative; }
+        .summary-seat .student-family-badge { position: absolute; top: -4px; right: -4px; z-index: 1; }
+        .summary-student-seat:has(.student-family-badge) { padding-right: 1.0625rem; }
         .badge-resolve { transition: all 0.2s; cursor: pointer; position: relative; overflow: hidden; }
         .badge-resolve:hover::after {
             content: "點擊過關";
@@ -81,7 +84,7 @@
         <!-- 標題與登入區 -->
         <header class="flex flex-col md:flex-row justify-between items-center relative gap-4">
             <div class="text-center md:text-left">
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-700">每日作業繳交紀錄 <span class="text-sm text-blue-500 font-bold ml-2">v16.9 (家別標記)</span></h1>
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-700">每日作業繳交紀錄 <span class="text-sm text-blue-500 font-bold ml-2">v16.10 (總表家別標記)</span></h1>
                 <p class="text-lg text-gray-500 mt-2 flex items-center gap-2 justify-center md:justify-start">
                     <span id="app-mode-label">單機模式 (未登入)</span>
                     <span id="save-indicator" class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full hidden">已存檔</span>
@@ -707,6 +710,8 @@
 
                 const currentAbsent = getGlobalAbsentSeats();
                 
+                const familiesBySeat = getFamiliesBySeat();
+
                 if (currentAbsent.length > 0) {
                     els.shieldIndicatorMissing.classList.remove('hidden');
                     els.shieldIndicatorCorrection.classList.remove('hidden');
@@ -767,13 +772,14 @@
                         header.className = 'bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center';
                         header.innerHTML = `
                             <div class="flex items-center gap-2">
-                                <span class="text-xl font-black text-gray-700">${seat}</span>
+                                <span class="summary-seat summary-student-seat text-xl font-black text-gray-700">${seat}</span>
                                 <span class="font-bold text-gray-600">${studentData.name}</span>
                             </div>
                             <span class="text-xs font-bold px-2 py-1 rounded-full ${isMissing ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}">
                                 共 ${studentData.items.length} 項
                             </span>
                         `;
+                        appendFamilyBadge(header.querySelector('.summary-student-seat'), familiesBySeat.get(Number(seat)));
                         card.appendChild(header);
 
                         const body = document.createElement('div');
@@ -841,7 +847,7 @@
                                 
                                 missingStudents.sort((a,b) => a.seatNumber - b.seatNumber).forEach(s => {
                                     const btn = document.createElement('div');
-                                    btn.className = `w-14 h-14 ${btnColorClass} text-white text-2xl font-bold rounded-2xl shadow transition transform hover:-translate-y-1 flex items-center justify-center cursor-pointer relative group`;
+                                    btn.className = `summary-seat w-14 h-14 ${btnColorClass} text-white text-2xl font-bold rounded-2xl shadow transition transform hover:-translate-y-1 flex items-center justify-center cursor-pointer group`;
                                     
                                     btn.innerHTML = `
                                         <span>${s.seatNumber}</span>
@@ -850,6 +856,7 @@
                                         </div>
                                     `;
                                     
+                                    appendFamilyBadge(btn, familiesBySeat.get(s.seatNumber));
                                     btn.onclick = () => resolveRecord(date, assign.id, s.seatNumber);
                                     rightBox.appendChild(btn);
                                 });
@@ -975,15 +982,7 @@
                 });
             }
 
-            function renderGrid() {
-                els.studentGrid.innerHTML = '';
-                const active = getActiveAssignment();
-                if (!active) {
-                    els.studentGrid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10 font-bold bg-white rounded-xl border-2 border-dashed border-gray-200">本日無作業，請點擊上方綠色「＋」按鈕新增作業。</div>';
-                    return;
-                }
-
-                const currentAbsent = getGlobalAbsentSeats();
+            function getFamiliesBySeat() {
                 const familiesBySeat = new Map();
                 const chineseFamilyNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
@@ -998,6 +997,31 @@
                         }
                     });
                 });
+                return familiesBySeat;
+            }
+
+            function appendFamilyBadge(container, family) {
+                if (!family) return;
+
+                const badge = document.createElement('span');
+                badge.className = 'student-family-badge';
+                badge.textContent = family.number;
+                badge.title = family.name;
+                badge.setAttribute('role', 'img');
+                badge.setAttribute('aria-label', family.name);
+                container.appendChild(badge);
+            }
+
+            function renderGrid() {
+                els.studentGrid.innerHTML = '';
+                const active = getActiveAssignment();
+                if (!active) {
+                    els.studentGrid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10 font-bold bg-white rounded-xl border-2 border-dashed border-gray-200">本日無作業，請點擊上方綠色「＋」按鈕新增作業。</div>';
+                    return;
+                }
+
+                const currentAbsent = getGlobalAbsentSeats();
+                const familiesBySeat = getFamiliesBySeat();
 
                 students.forEach(student => {
                     const isAbsent = currentAbsent.includes(student.seatNumber);
@@ -1020,16 +1044,7 @@
                         <div class="text-xs mt-1 border-t ${statusBorderClass} pt-1 pointer-events-none">${statusText}</div>
                     `;
 
-                    const family = familiesBySeat.get(student.seatNumber);
-                    if (family) {
-                        const badge = document.createElement('span');
-                        badge.className = 'student-family-badge';
-                        badge.textContent = family.number;
-                        badge.title = family.name;
-                        badge.setAttribute('role', 'img');
-                        badge.setAttribute('aria-label', family.name);
-                        div.querySelector('.student-card-heading').appendChild(badge);
-                    }
+                    appendFamilyBadge(div.querySelector('.student-card-heading'), familiesBySeat.get(student.seatNumber));
 
                     els.studentGrid.appendChild(div);
                 });
@@ -1177,7 +1192,12 @@
                     const members = memStr.split(/[,\s]+/).map(s => parseInt(s)).filter(n => !isNaN(n));
                     if (name && members.length) newGroups.push({ name: name.trim(), members });
                 });
-                if (newGroups.length) { studentGroups = newGroups; if(currentTab === 'daily') render(); saveSettings(); }
+                if (newGroups.length) {
+                    studentGroups = newGroups;
+                    if (currentTab === 'daily') render();
+                    else renderSummary(currentSummaryStatus);
+                    saveSettings();
+                }
             });
 
             els.studentGrid.addEventListener('click', (e) => {
